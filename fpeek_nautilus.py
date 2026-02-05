@@ -76,17 +76,17 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
 
             metadata = f"""<b>Path:</b> {filepath}
 
-        <b>Type:</b> {file_type}
-    
-        <b>Size:</b> {self.format_size(stat.st_size)}
-    
-        <b>Owner:</b> {owner_name}:{group_name}
-    
-        <b>Permissions:</b> {perms_octal} ({perms_human})
-    
-        <b>Modified:</b> {self.format_time_ago(stat.st_mtime)}
-    
-        <b>Inode:</b> {stat.st_ino}"""
+            <b>Type:</b> {file_type}
+
+            <b>Size:</b> {self.format_size(stat.st_size)}
+
+            <b>Owner:</b> {owner_name}:{group_name}
+
+            <b>Permissions:</b> {perms_octal} ({perms_human})
+
+            <b>Modified:</b> {self.format_time_ago(stat.st_mtime)}
+
+            <b>Inode:</b> {stat.st_ino}"""
 
             if not os.path.isdir(filepath) and not os.path.islink(filepath):
                 duplicates = self.find_duplicates(filepath)
@@ -101,26 +101,29 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
                     if dup_count > 5:
                         metadata += f" (+{dup_count - 5} more)"
 
-
             if mime_type and mime_type.startswith('image/'):
                 img_data = self.analyze_image(filepath)
                 if img_data:
                     if 'error' in img_data:
-                        metadata += f"\n\n<b>Image Analysis:</b> Error - {img_data['error']}"
+                        metadata += f"""
+            ───────────────────────
+            <b>Image Analysis:</b> Error - {img_data['error']}"""
                     else:
                         metadata += f"""
-    ───────────────────────
-    <b>Image Analysis:</b>
-      Dimensions: {img_data['width']} x {img_data['height']}
-      Color Mode: {img_data['mode']}
-      Format: {img_data['format']}
+            ───────────────────────
+            <b>Image Analysis:</b>
+              Dimensions: {img_data['width']} x {img_data['height']}
+              Color Mode: {img_data['mode']}
+              Format: {img_data['format']}
 
-    <b>Frequency Domain (DFT):</b>
-      Mean Frequency: {img_data['mean_frequency']:.2f}
-      Max Frequency: {img_data['max_frequency']:.2f}
-      Sharpness: {img_data['sharpness']:.2f}%"""
+            <b>Frequency Domain (DFT):</b>
+              Mean Frequency: {img_data['mean_frequency']:.2f}
+              Max Frequency: {img_data['max_frequency']:.2f}
+              Sharpness: {img_data['sharpness']:.2f}%"""
                 elif not IS_IMG:
-                    metadata += "\n\n<b>Image Analysis:</b> Install numpy and pillow"
+                    metadata += """
+            ───────────────────────
+            <b>Image Analysis:</b> Install numpy and pillow"""
 
         except Exception as e:
             metadata = f"<b>Error:</b> {str(e)}"
