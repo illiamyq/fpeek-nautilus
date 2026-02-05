@@ -5,8 +5,8 @@ Right-click any file → **File Peek** → see readable metadata instantly. The 
 
 ## Install
 ```bash
-git clone https://github.com/illiamyq/fpeek-nautilus-ext.git
-cd fpeek-nautilus-ext
+git clone https://github.com/illiamyq/fpeek-nautilus.git
+cd fpeek-nautilus
 ./install.sh
 ```
 
