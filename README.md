@@ -1,4 +1,4 @@
-# fpeek 🔍
+# fpeek nautilus
 
 Quick file metadata viewer for GNOME Files (Nautilus).
 Right-click any file → **File Peek** → see readable metadata instantly. The plan is to adjust and build features for DCT/DFT conversion, spectral analysis of discrete signals (images/audio).
@@ -23,15 +23,15 @@ killall nautilus
 
 ## Roadmap
 
-- Audio/video metadata (duration, codec, bitrate)
+- [+] basic DFT analysis for images
 - file hash calculator (MD5, SHA256)
 - git file status 
-- duplicate file finder
+- [+]duplicate file finder
 - custom metadata tags/notes
 - preview
-- mass export of metadata to archive 
+- mass export/share of metadata to archive 
 - SETTINGS
-
+- Lower level adjustments
 ## Requirements
 
 - Nautilus 43+
@@ -39,7 +39,7 @@ killall nautilus
 - `nautilus-python`
 
 
-## **Example Output (Improved)**
+## **Example Output **
 ```
 Path: /home/usr/scripts
 Type: Directory
