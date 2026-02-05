@@ -76,17 +76,17 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
 
             metadata = f"""<b>Path:</b> {filepath}
 
-            <b>Type:</b> {file_type}
-        
-            <b>Size:</b> {self.format_size(stat.st_size)}
-        
-            <b>Owner:</b> {owner_name}:{group_name}
-        
-            <b>Permissions:</b> {perms_octal} ({perms_human})
-        
-            <b>Modified:</b> {self.format_time_ago(stat.st_mtime)}
-        
-            <b>Inode:</b> {stat.st_ino}"""
+        <b>Type:</b> {file_type}
+    
+        <b>Size:</b> {self.format_size(stat.st_size)}
+    
+        <b>Owner:</b> {owner_name}:{group_name}
+    
+        <b>Permissions:</b> {perms_octal} ({perms_human})
+    
+        <b>Modified:</b> {self.format_time_ago(stat.st_mtime)}
+    
+        <b>Inode:</b> {stat.st_ino}"""
 
             if not os.path.isdir(filepath) and not os.path.islink(filepath):
                 duplicates = self.find_duplicates(filepath)
@@ -94,7 +94,7 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
                     dup_count = len(duplicates)
                     wasted_space = stat.st_size * dup_count
                     metadata += f"""
-
+            ───────────────────────
             <b>Duplicates:</b> {dup_count} found in same directory
             <b>Wasted Space:</b> {self.format_size(wasted_space)}
             <b>Files:</b> {', '.join(duplicates[:5])}"""
@@ -109,7 +109,7 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
                         metadata += f"\n\n<b>Image Analysis:</b> Error - {img_data['error']}"
                     else:
                         metadata += f"""
-
+    ───────────────────────
     <b>Image Analysis:</b>
       Dimensions: {img_data['width']} x {img_data['height']}
       Color Mode: {img_data['mode']}
