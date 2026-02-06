@@ -24,7 +24,7 @@ killall nautilus
 ## Roadmap
 
 - [+] basic DFT analysis for images
-- file hash calculator (MD5, SHA256)
+- [+] file hash calculator (MD5, SHA256)
 - git file status 
 - [+]duplicate file finder
 - custom metadata tags/notes

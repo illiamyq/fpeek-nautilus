@@ -8,7 +8,7 @@ import gi
 gi.require_version('Nautilus', '4.1')
 gi.require_version('Gtk', '4.0')
 
-from gi.repository import Nautilus, GObject, Gtk
+from gi.repository import Nautilus, GObject, Gtk, GdkPixbuf, Gio, GLib
 import os
 import pwd
 import grp
@@ -20,8 +20,15 @@ try:
     import numpy as np
     from PIL import Image
     IS_IMG = True
+    import matplotlib
+
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import io
+    import base64
 except ImportError:
     IS_IMG = False
+
 
 class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
     def __init__(self):
@@ -50,6 +57,7 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
 
         try:
             stat = os.stat(filepath)
+
             try:
                 owner_name = pwd.getpwuid(stat.st_uid).pw_name
             except KeyError:
@@ -59,9 +67,9 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
                 group_name = grp.getgrgid(stat.st_gid).gr_name
             except KeyError:
                 group_name = str(stat.st_gid)
+
             perms_octal = oct(stat.st_mode)[-3:]
             perms_human = self.interpret_permissions(perms_octal)
-
             mime_type = mimetypes.guess_type(filepath)[0]
 
             if os.path.isdir(filepath):
@@ -76,83 +84,95 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
 
             metadata = f"""<b>Path:</b> {filepath}
 
-            <b>Type:</b> {file_type}
+    <b>Type:</b> {file_type}
 
-            <b>Size:</b> {self.format_size(stat.st_size)}
+    <b>Size:</b> {self.format_size(stat.st_size)}
 
-            <b>Owner:</b> {owner_name}:{group_name}
+    <b>Owner:</b> {owner_name}:{group_name}
 
-            <b>Permissions:</b> {perms_octal} ({perms_human})
+    <b>Permissions:</b> {perms_octal} ({perms_human})
 
-            <b>Modified:</b> {self.format_time_ago(stat.st_mtime)}
+    <b>Modified:</b> {self.format_time_ago(stat.st_mtime)}
 
-            <b>Inode:</b> {stat.st_ino}"""
+    <b>Inode:</b> {stat.st_ino}"""
 
             if not os.path.isdir(filepath) and not os.path.islink(filepath):
+                file_hash = self.calculate_hash(filepath)
+                if file_hash:
+                    # Sreadable hash parts
+                    hash_formatted = ' '.join([file_hash[i:i + 8] for i in range(0, len(file_hash), 8)])
+                    metadata += f"""
+    ───────────────────────
+    <b>SHA256 Hash:</b>
+    <span font_family='monospace' size='small'>{hash_formatted}</span>"""
+
                 duplicates = self.find_duplicates(filepath)
                 if duplicates:
                     dup_count = len(duplicates)
                     wasted_space = stat.st_size * dup_count
                     metadata += f"""
-            ───────────────────────
-            <b>Duplicates:</b> {dup_count} found in same directory
-            <b>Wasted Space:</b> {self.format_size(wasted_space)}
-            <b>Files:</b> {', '.join(duplicates[:5])}"""
+    ───────────────────────
+    <b>Duplicates:</b> {dup_count} found in same directory
+    <b>Wasted Space:</b> {self.format_size(wasted_space)}
+    <b>Files:</b> {', '.join(duplicates[:5])}"""
                     if dup_count > 5:
                         metadata += f" (+{dup_count - 5} more)"
 
             if mime_type and mime_type.startswith('image/'):
-                img_data = self.analyze_image(filepath)
-                if img_data:
-                    if 'error' in img_data:
+                if IS_IMG:
+                    try:
+                        img = Image.open(filepath)
                         metadata += f"""
-            ───────────────────────
-            <b>Image Analysis:</b> Error - {img_data['error']}"""
-                    else:
+    ───────────────────────
+    <b>Image Info:</b>
+      Dimensions: {img.width} x {img.height}
+      Color Mode: {img.mode}
+      Format: {img.format}"""
+                    except Exception as e:
                         metadata += f"""
-            ───────────────────────
-            <b>Image Analysis:</b>
-              Dimensions: {img_data['width']} x {img_data['height']}
-              Color Mode: {img_data['mode']}
-              Format: {img_data['format']}
-
-            <b>Frequency Domain (DFT):</b>
-              Mean Frequency: {img_data['mean_frequency']:.2f}
-              Max Frequency: {img_data['max_frequency']:.2f}
-              Sharpness: {img_data['sharpness']:.2f}%"""
-                elif not IS_IMG:
+    ───────────────────────
+    <b>Image Info:</b> Error - {str(e)}"""
+                else:
                     metadata += """
-            ───────────────────────
-            <b>Image Analysis:</b> Install numpy and pillow"""
+    ───────────────────────
+    <b>Image Analysis:</b> Install numpy and pillow"""
 
         except Exception as e:
             metadata = f"<b>Error:</b> {str(e)}"
 
-        dialog = Gtk.MessageDialog(
-            message_type=Gtk.MessageType.INFO,
-            buttons=Gtk.ButtonsType.CLOSE,
-            text="File Peek"
-        )
-        dialog.set_property("secondary-text", "")
-        dialog.set_property("secondary-use-markup", True)
+        dialog = Gtk.Window()
+        dialog.set_title("File Peek")
+        dialog.set_default_size(650, 500)
+
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        main_box.set_margin_start(20)
+        main_box.set_margin_end(20)
+        main_box.set_margin_top(20)
+        main_box.set_margin_bottom(20)
 
         label = Gtk.Label()
         label.set_markup(metadata)
         label.set_selectable(True)
-        label.set_wrap(False)  # updated + margin not fixed
-        label.set_xalign(0)  # Left
+        label.set_wrap(False)
+        label.set_xalign(0)
 
-        label.set_margin_start(20)
-        label.set_margin_end(20)
-        label.set_margin_top(10)
-        label.set_margin_bottom(10)
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_child(label)
+        scrolled.set_vexpand(True)
 
-        box = dialog.get_content_area()
-        box.append(label)
+        main_box.append(scrolled)
 
+        if mime_type and mime_type.startswith('image/') and IS_IMG:
+            spectrum_btn = Gtk.Button(label="Show DFT Rozkład")
+            spectrum_btn.connect('clicked', self.show_spectrum_window, filepath)
+            main_box.append(spectrum_btn)
+
+        close_btn = Gtk.Button(label="Close")
+        close_btn.connect('clicked', lambda w: dialog.close())
+        main_box.append(close_btn)
+
+        dialog.set_child(main_box)
         dialog.present()
-        dialog.connect('response', lambda d, r: d.destroy())
-
     def format_size(self, size):
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
             if size < 1024.0:
@@ -295,3 +315,59 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
             }
         except Exception as e:
             return {'error': str(e)}
+
+    def dft_graph(self, filepath):
+        """1D frequency dft plot
+        https://en.wikipedia.org/wiki/Discrete_Fourier_transform
+        """
+        if not IS_IMG:
+            return None
+
+        try:
+            img = Image.open(filepath).convert('L')
+            img_array = np.array(img)
+
+            dft = np.fft.fft2(img_array)
+            dft_shift = np.fft.fftshift(dft)
+            magnitude = np.abs(dft_shift)
+
+            avg_spectrum = np.mean(magnitude, axis=0)
+
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.plot(avg_spectrum)
+            ax.set_title('1D Frequency Spectrum')
+            ax.set_xlabel('Frequency')
+            ax.set_ylabel('Magnitude')
+            ax.grid(True, alpha=0.3)
+
+            plt.tight_layout()
+
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+            buf.seek(0)
+            plt.close(fig)
+
+            return base64.b64encode(buf.read()).decode('utf-8')
+        except:
+            return None
+
+    def show_spectrum_window(self, button, filepath):
+        """specific window for spectrum graph"""
+        spectrum_b64 = self.dft_graph(filepath)
+
+        if not spectrum_b64:
+            return
+
+        img_data = base64.b64decode(spectrum_b64)
+
+        input_stream = Gio.MemoryInputStream.new_from_bytes(
+            GLib.Bytes.new(img_data)
+        )
+        pixbuf = GdkPixbuf.Pixbuf.new_from_stream(input_stream, None)
+        spectrum_win = Gtk.Window()
+        spectrum_win.set_title("1D Frequency Plot")
+        spectrum_win.set_default_size(700, 450)
+        picture = Gtk.Picture.new_for_pixbuf(pixbuf)
+
+        spectrum_win.set_child(picture)
+        spectrum_win.present()

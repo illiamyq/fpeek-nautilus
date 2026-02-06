@@ -10,7 +10,7 @@ if ! rpm -qa | grep -q nautilus-python; then
 fi
 
 echo "image analysis dependencies are being installed;"
-pip3 install --user numpy pillow --break-system-packages
+pip3 install --user numpy pillow matplotlib --break-system-packages
 
 EXTENSION_DIR="$HOME/.local/share/nautilus-python/extensions"
 mkdir -p "$EXTENSION_DIR"
