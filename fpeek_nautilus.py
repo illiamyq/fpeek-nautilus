@@ -5,16 +5,29 @@ Shows detailed file metadata in context menu
 """
 
 import gi
-
 gi.require_version('Nautilus', '4.1')
 gi.require_version('Gtk', '4.0')
 
-from gi.repository import Nautilus, GObject, Gtk
+from gi.repository import Nautilus, GObject, Gtk, GdkPixbuf, Gio, GLib
 import os
 import pwd
 import grp
 from datetime import datetime
 import mimetypes
+import hashlib
+
+try:
+    import numpy as np
+    from PIL import Image
+    IS_IMG = True
+    import matplotlib
+
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    import io
+    import base64
+except ImportError:
+    IS_IMG = False
 
 
 class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
@@ -32,8 +45,8 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
 
         item = Nautilus.MenuItem(
             name='FPeekExtension::ShowMetadata',
-            label='🔍',
-            tip='fpeek metadata'
+            label='peek file metadata',
+            tip='fpeek metadata',
         )
         item.connect('activate', self.on_show_metadata, file)
 
@@ -45,7 +58,6 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
         try:
             stat = os.stat(filepath)
 
-            # Get human-readable owner/group
             try:
                 owner_name = pwd.getpwuid(stat.st_uid).pw_name
             except KeyError:
@@ -56,59 +68,111 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
             except KeyError:
                 group_name = str(stat.st_gid)
 
-            # Interpret permissions
             perms_octal = oct(stat.st_mode)[-3:]
             perms_human = self.interpret_permissions(perms_octal)
+            mime_type = mimetypes.guess_type(filepath)[0]
 
-            # File type
             if os.path.isdir(filepath):
                 file_type = "Directory"
             elif os.path.islink(filepath):
                 file_type = "Symbolic Link"
             else:
-                mime_type = mimetypes.guess_type(filepath)[0]
                 if mime_type:
                     file_type = mime_type.split('/')[0].capitalize()
                 else:
                     file_type = "File"
 
-            # Build metadata text
             metadata = f"""<b>Path:</b> {filepath}
 
-<b>Type:</b> {file_type}
+    <b>Type:</b> {file_type}
 
-<b>Size:</b> {self.format_size(stat.st_size)}
+    <b>Size:</b> {self.format_size(stat.st_size)}
 
-<b>Owner:</b> {owner_name}:{group_name}
+    <b>Owner:</b> {owner_name}:{group_name}
 
-<b>Permissions:</b> {perms_octal} ({perms_human})
+    <b>Permissions:</b> {perms_octal} ({perms_human})
 
-<b>Modified:</b> {self.format_time_ago(stat.st_mtime)}
+    <b>Modified:</b> {self.format_time_ago(stat.st_mtime)}
 
-<b>Inode:</b> {stat.st_ino}"""
+    <b>Inode:</b> {stat.st_ino}"""
+
+            if not os.path.isdir(filepath) and not os.path.islink(filepath):
+                file_hash = self.calculate_hash(filepath)
+                if file_hash:
+                    # Sreadable hash parts
+                    hash_formatted = ' '.join([file_hash[i:i + 8] for i in range(0, len(file_hash), 8)])
+                    metadata += f"""
+    ───────────────────────
+    <b>SHA256 Hash:</b>
+    <span font_family='monospace' size='small'>{hash_formatted}</span>"""
+
+                duplicates = self.find_duplicates(filepath)
+                if duplicates:
+                    dup_count = len(duplicates)
+                    wasted_space = stat.st_size * dup_count
+                    metadata += f"""
+    ───────────────────────
+    <b>Duplicates:</b> {dup_count} found in same directory
+    <b>Wasted Space:</b> {self.format_size(wasted_space)}
+    <b>Files:</b> {', '.join(duplicates[:5])}"""
+                    if dup_count > 5:
+                        metadata += f" (+{dup_count - 5} more)"
+
+            if mime_type and mime_type.startswith('image/'):
+                if IS_IMG:
+                    try:
+                        img = Image.open(filepath)
+                        metadata += f"""
+    ───────────────────────
+    <b>Image Info:</b>
+      Dimensions: {img.width} x {img.height}
+      Color Mode: {img.mode}
+      Format: {img.format}"""
+                    except Exception as e:
+                        metadata += f"""
+    ───────────────────────
+    <b>Image Info:</b> Error - {str(e)}"""
+                else:
+                    metadata += """
+    ───────────────────────
+    <b>Image Analysis:</b> Install numpy and pillow"""
 
         except Exception as e:
             metadata = f"<b>Error:</b> {str(e)}"
 
-        # Create dialog
-        dialog = Gtk.MessageDialog(
-            message_type=Gtk.MessageType.INFO,
-            buttons=Gtk.ButtonsType.CLOSE,
-            text="File Peek"
-        )
-        dialog.set_property("secondary-text", "")
-        dialog.set_property("secondary-use-markup", True)
+        dialog = Gtk.Window()
+        dialog.set_title("File Peek")
+        dialog.set_default_size(650, 500)
+
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        main_box.set_margin_start(20)
+        main_box.set_margin_end(20)
+        main_box.set_margin_top(20)
+        main_box.set_margin_bottom(20)
 
         label = Gtk.Label()
         label.set_markup(metadata)
         label.set_selectable(True)
+        label.set_wrap(False)
+        label.set_xalign(0)
 
-        box = dialog.get_content_area()
-        box.append(label)
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_child(label)
+        scrolled.set_vexpand(True)
 
+        main_box.append(scrolled)
+
+        if mime_type and mime_type.startswith('image/') and IS_IMG:
+            spectrum_btn = Gtk.Button(label="Show DFT Rozkład")
+            spectrum_btn.connect('clicked', self.show_spectrum_window, filepath)
+            main_box.append(spectrum_btn)
+
+        close_btn = Gtk.Button(label="Close")
+        close_btn.connect('clicked', lambda w: dialog.close())
+        main_box.append(close_btn)
+
+        dialog.set_child(main_box)
         dialog.present()
-        dialog.connect('response', lambda d, r: d.destroy())
-
     def format_size(self, size):
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
             if size < 1024.0:
@@ -156,10 +220,154 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
             ago = f"{diff.seconds // 3600}h ago"
             color = "#6897BB"
         elif diff.seconds > 60:
-            ago = f"{diff.seconds // 60}m ago"
+            ago = f"{diff.seconds // 60}min ago"
             color = "#6897BB"
         else:
             ago = "just now"
             color = "#6897BB"
 
         return f"{formatted} (<span foreground='{color}'>{ago}</span>)"
+
+    def find_duplicates(self, filepath):
+        try:
+            file_hash = self.calculate_hash(filepath)
+            directory = os.path.dirname(filepath)
+            current_filename = os.path.basename(filepath)
+
+            duplicates = []
+            for filename in os.listdir(directory):
+                full_path = os.path.join(directory, filename)
+                if full_path == filepath or os.path.isdir(full_path):
+                    continue
+
+                try:
+                    # (size==size) filter
+                    if os.path.getsize(full_path) != os.path.getsize(filepath):
+                        continue
+                    other_hash = self.calculate_hash(full_path)
+
+                    if other_hash == file_hash:
+                        duplicates.append(filename)
+                except (OSError, PermissionError):
+                    continue
+
+            # duplicates.extend(self.search_home_duplicates(file_hash, filepath))
+
+            return duplicates
+        except Exception as e:
+            return None
+
+    def calculate_hash(self, filepath, algorithm='sha256'):
+        """hash based search, read in chunks for large files"""
+        hash_func = hashlib.new(algorithm)
+
+        try:
+            with open(filepath, 'rb') as f:
+                for chunk in iter(lambda: f.read(8192), b''):
+                    hash_func.update(chunk)
+            return hash_func.hexdigest()
+        except Exception:
+            return None
+
+    # search from home
+    # def search_home_duplicates(self, file_hash, original_path):
+
+    #     return duplicates
+
+    def analyze_image(self, filepath):
+        """DFT TRANSFORM"""
+        if not IS_IMG:
+            return None
+
+        try:
+            img = Image.open(filepath)
+            img_gray = img.convert('L')
+            img_array = np.array(img_gray)
+
+            dft = np.fft.fft2(img_array)
+            dft_shift = np.fft.fftshift(dft)
+
+            magnitude = np.abs(dft_shift)
+            width, height = img.size
+            mean_freq = np.mean(magnitude)
+            max_freq = np.max(magnitude)
+
+            center_y, center_x = magnitude.shape[0] // 2, magnitude.shape[1] // 2
+            radius = min(center_y, center_x) // 3
+
+            high_freq_mask = np.ones_like(magnitude, dtype=bool)
+            y, x = np.ogrid[:magnitude.shape[0], :magnitude.shape[1]]
+            mask = (x - center_x) ** 2 + (y - center_y) ** 2 <= radius ** 2
+            high_freq_mask[mask] = False
+
+            high_freq_energy = np.sum(magnitude[high_freq_mask])
+            total_energy = np.sum(magnitude)
+            sharpness_ratio = (high_freq_energy / total_energy) * 100
+
+            return {
+                'width': width,
+                'height': height,
+                'mode': img.mode,
+                'format': img.format,
+                'mean_frequency': mean_freq,
+                'max_frequency': max_freq,
+                'sharpness': sharpness_ratio
+            }
+        except Exception as e:
+            return {'error': str(e)}
+
+    def dft_graph(self, filepath):
+        """1D frequency dft plot
+        https://en.wikipedia.org/wiki/Discrete_Fourier_transform
+        """
+        if not IS_IMG:
+            return None
+
+        try:
+            img = Image.open(filepath).convert('L')
+            img_array = np.array(img)
+
+            dft = np.fft.fft2(img_array)
+            dft_shift = np.fft.fftshift(dft)
+            magnitude = np.abs(dft_shift)
+
+            avg_spectrum = np.mean(magnitude, axis=0)
+
+            fig, ax = plt.subplots(figsize=(8, 4))
+            ax.plot(avg_spectrum)
+            ax.set_title('1D Frequency Spectrum')
+            ax.set_xlabel('Frequency')
+            ax.set_ylabel('Magnitude')
+            ax.grid(True, alpha=0.3)
+
+            plt.tight_layout()
+
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png', dpi=100, bbox_inches='tight')
+            buf.seek(0)
+            plt.close(fig)
+
+            return base64.b64encode(buf.read()).decode('utf-8')
+        except:
+            return None
+
+    def show_spectrum_window(self, button, filepath):
+        """specific window for spectrum graph"""
+        spectrum_b64 = self.dft_graph(filepath)
+
+        if not spectrum_b64:
+            return
+
+        img_data = base64.b64decode(spectrum_b64)
+
+        input_stream = Gio.MemoryInputStream.new_from_bytes(
+            GLib.Bytes.new(img_data)
+        )
+        pixbuf = GdkPixbuf.Pixbuf.new_from_stream(input_stream, None)
+        spectrum_win = Gtk.Window()
+        spectrum_win.set_title("1D Frequency Plot")
+        spectrum_win.set_default_size(700, 450)
+        picture = Gtk.Picture.new_for_pixbuf(pixbuf)
+
+        spectrum_win.set_child(picture)
+        spectrum_win.present()
