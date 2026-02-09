@@ -8,14 +8,14 @@ import gi
 gi.require_version('Nautilus', '4.1')
 gi.require_version('Gtk', '4.0')
 
-from gi.repository import Nautilus, GObject, Gtk, GdkPixbuf, Gio, GLib
+from gi.repository import Nautilus, GObject, Gtk, GdkPixbuf, Gio, GLib, Gdk
 import os
 import pwd
 import grp
 from datetime import datetime
 import mimetypes
 import hashlib
-
+import subprocess
 try:
     import numpy as np
     from PIL import Image
@@ -163,13 +163,20 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
         main_box.append(scrolled)
 
         if mime_type and mime_type.startswith('image/') and IS_IMG:
-            spectrum_btn = Gtk.Button(label="Show DFT Rozkład")
+            spectrum_btn = Gtk.Button(label="Show DFT Frequency chart")
             spectrum_btn.connect('clicked', self.show_spectrum_window, filepath)
             main_box.append(spectrum_btn)
+
+        copy_path_btn = Gtk.Button(label="Copy path")
+        copy_path_btn.connect('clicked', lambda w: self.copy_to_clipboard(filepath))
+        main_box.append(copy_path_btn)
+
 
         close_btn = Gtk.Button(label="Close")
         close_btn.connect('clicked', lambda w: dialog.close())
         main_box.append(close_btn)
+
+
 
         dialog.set_child(main_box)
         dialog.present()
@@ -227,6 +234,10 @@ class FPeekExtension(GObject.GObject, Nautilus.MenuProvider):
             color = "#6897BB"
 
         return f"{formatted} (<span foreground='{color}'>{ago}</span>)"
+
+    def copy_to_clipboard(self, text):
+        clipboard = Gdk.Display.get_default().get_clipboard()
+        clipboard.set(text)
 
     def find_duplicates(self, filepath):
         try:
