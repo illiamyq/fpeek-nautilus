@@ -3,14 +3,50 @@ set -e
 
 echo "Installing fpeek Nautilus Extension..."
 
-# Check dependencies
-if ! rpm -qa | grep -q nautilus-python; then
-    echo "Installing nautilus-python..."
-    sudo dnf install -y nautilus-python python3-nautilus
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    DISTRO=$ID
+else
+    echo "Cannot detect distribution"
+    exit 1
 fi
 
-echo "image analysis dependencies are being installed;"
-pip3 install --user numpy pillow matplotlib --break-system-packages
+echo "Detected distribution: $DISTRO"
+
+case $DISTRO in
+    fedora)
+        echo "Installing dependencies for Fedora..."
+        if ! rpm -qa | grep -q nautilus-python; then
+            sudo dnf install -y nautilus-python python3-nautilus
+        fi
+        sudo dnf install -y --allowerasing ffmpeg
+        ;;
+    
+    ubuntu|debian|pop|linuxmint)
+        echo "Installing dependencies for Debian/Ubuntu..."
+        sudo apt update
+        sudo apt install -y python3-nautilus ffmpeg python3-pip
+        ;;
+    
+    arch|manjaro)
+        echo "Installing dependencies for Arch..."
+        sudo pacman -S --needed --noconfirm python-nautilus ffmpeg python-pip
+        ;;
+    
+    opensuse*|suse)
+        echo "Installing dependencies for openSUSE..."
+        sudo zypper install -y python3-nautilus ffmpeg python3-pip
+        ;;
+    
+    *)
+        echo "Unsupported distribution: $DISTRO"
+        echo "Please install manually: nautilus-python, ffmpeg, python3-pip"
+        exit 1
+        ;;
+esac
+
+echo "Installing Python dependencies (numpy, pillow, matplotlib)..."
+pip3 install --user numpy pillow matplotlib
 
 EXTENSION_DIR="$HOME/.local/share/nautilus-python/extensions"
 mkdir -p "$EXTENSION_DIR"
