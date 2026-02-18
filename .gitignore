@@ -1,4 +1,11 @@
+.idea/
 __pycache__/
 *.pyc
 *.pyo
-.DS_Store
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
