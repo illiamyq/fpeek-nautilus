@@ -19,28 +19,28 @@ case $DISTRO in
         if ! rpm -qa | grep -q nautilus-python; then
             sudo dnf install -y nautilus-python python3-nautilus
         fi
-        sudo dnf install -y --allowerasing ffmpeg
+        sudo dnf install -y --allowerasing ffmpeg file
         ;;
     
     ubuntu|debian|pop|linuxmint)
         echo "Installing dependencies for Debian/Ubuntu..."
         sudo apt update
-        sudo apt install -y python3-nautilus ffmpeg python3-pip
+        sudo apt install -y python3-nautilus ffmpeg python3-pip file
         ;;
     
     arch|manjaro)
         echo "Installing dependencies for Arch..."
-        sudo pacman -S --needed --noconfirm python-nautilus ffmpeg python-pip
+        sudo pacman -S --needed --noconfirm python-nautilus ffmpeg python-pip file
         ;;
     
     opensuse*|suse)
         echo "Installing dependencies for openSUSE..."
-        sudo zypper install -y python3-nautilus ffmpeg python3-pip
+        sudo zypper install -y python3-nautilus ffmpeg python3-pip file
         ;;
     
     *)
         echo "Unsupported distribution: $DISTRO"
-        echo "Please install manually: nautilus-python, ffmpeg, python3-pip"
+        echo "Please install manually: nautilus-python, ffmpeg, file, python3-pip"
         exit 1
         ;;
 esac
@@ -51,7 +51,9 @@ pip3 install --user numpy pillow matplotlib
 EXTENSION_DIR="$HOME/.local/share/nautilus-python/extensions"
 mkdir -p "$EXTENSION_DIR"
 
+cp fpeek_common.py "$EXTENSION_DIR/"
 cp fpeek_nautilus.py "$EXTENSION_DIR/"
+cp fpeek_analysis.py "$EXTENSION_DIR/"
 
 echo "✓ Extension installed!"
 echo ""
