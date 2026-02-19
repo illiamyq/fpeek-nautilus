@@ -251,6 +251,18 @@ class FpeekAnalysisExtension(GObject.GObject, Nautilus.MenuProvider):
     def on_generate_archive(self, path):
         try:
             if os.path.isfile(path):
+                file_size = os.path.getsize(path)
+                max_file_size = 100 * 1024 * 1024 # 60 * 1024 * 1024
+
+                if file_size > max_file_size:
+                    subprocess.run([
+                        'notify-send',
+                        'Archive Error',
+                        f'File too large ({format_size(file_size)}). Maximum size: 100 MB - ! can adjust fpeek_analysis line 255',
+                        '-u', 'critical'
+                    ])
+                    return
+
                 metadata = get_file_metadata(path)
                 metadata['checksums'] = {
                     'md5': calculate_hash(path, 'md5'),
@@ -270,6 +282,29 @@ class FpeekAnalysisExtension(GObject.GObject, Nautilus.MenuProvider):
                 subprocess.run(['notify-send', 'Archive Created', f'Saved to: {os.path.basename(archive_path)}'])
 
             else:
+                total_files = 0
+                max_files = 1000
+
+                for root, dirs, files in os.walk(path):
+                    total_files += len(files)
+                    if total_files > max_files:
+                        subprocess.run([
+                            'notify-send',
+                            'Archive Error',
+                            f'Too many files (>{max_files}). Dir too large to archive - adjust in fpeek_analysis line 294.',
+                            '-u', 'critical'
+                        ])
+                        return
+
+                if total_files == 0:
+                    subprocess.run([
+                        'notify-send',
+                        'Archive Error',
+                        'No files found in directory',
+                        '-u', 'critical'
+                    ])
+                    return
+
                 metadata = {
                     'directory': path,
                     'generated': datetime.now().isoformat(),

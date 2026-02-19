@@ -21,17 +21,19 @@ rm ~/.local/share/nautilus-python/extensions/fpeek_nautilus.py
 killall nautilus
 ```
 
-## Roadmap
+## Implemented
 
-- [+] basic DFT analysis for images
-- [+] file hash calculator (MD5, SHA256)
-- git file status 
-- [+]duplicate file finder
+- basic DFT analysis for images
+- file hash calculator (MD5, SHA256)
+- duplicate file finder
+- mass export/share of metadata to archive
+
+##  Posible enhancements
+
 - custom metadata tags/notes
-- preview
-- mass export/share of metadata to archive 
-- SETTINGS
-- Lower level adjustments
+- lower level adjustments
+- preferences file for basic directory/file analysis settings. Script to handle preferences
+
 ## Requirements
 
 - Nautilus 43+
